@@ -41,7 +41,7 @@ else ifeq ($(COMPILER),gcc)
   else
     CC    := gcc
   endif
-  CFLAGS  := -std=c11 -Wall -Wextra -O2 -fopenmp -I. 
+  CFLAGS  := -std=c11 -Wall -Wextra -O2 -fopenmp -I.
   LDFLAGS := -fopenmp -lm
   OFFLOAD_TARGET  ?= nvptx64-nvidia-cuda
   OFFLOAD_CFLAGS  := -fopenmp-targets=$(OFFLOAD_TARGET)

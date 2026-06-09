@@ -383,13 +383,23 @@ int main(int argc, char *argv[])
     int N = 1000;
     int MAX_LEVEL = 10;
     int MAX_PER_LEAF = 10;
-    bool use_gpu = true;
+    int NUM_SAMPLES = 5;                       /* 對照輸出的粒子數 */
+    int NUM_THREADS = omp_get_max_threads();   /* 使用的核心數 */
+    unsigned int SEED = 42;                    /* 隨機資料種子 */
+    int USE_DIRECT = 1;                        /* 是否跑 direct sum 對照（y/n） */
     if (argc > 1) N = atoi(argv[1]);
     if (argc > 2) MAX_LEVEL = atoi(argv[2]);
     if (argc > 3) MAX_PER_LEAF = atoi(argv[3]);
-    if (argc > 4) use_gpu = (atoi(argv[4]) != 0);
+    if (argc > 4) NUM_SAMPLES = atoi(argv[4]);
+    if (argc > 5) NUM_THREADS = atoi(argv[5]);
+    if (argc > 6) SEED = (unsigned int)strtoul(argv[6], NULL, 10);
+    if (argc > 7) USE_DIRECT = (argv[7][0] == 'y' || argv[7][0] == 'Y' || argv[7][0] == '1');
 
-    srand(42);
+    if (NUM_THREADS < 1) NUM_THREADS = 1;
+    omp_set_num_threads(NUM_THREADS);
+    if (NUM_SAMPLES < 0) NUM_SAMPLES = 0;
+
+    srand(SEED);
     Particle *particles = malloc(N * sizeof(Particle));
     for (int i = 0; i < N; i++) {
         particles[i].x         = (double)rand() / RAND_MAX * 100.0;
@@ -405,7 +415,10 @@ int main(int argc, char *argv[])
     printf("FMM_ORDER    : %d\n", FMM_ORDER);
     printf("MAX_LEVEL    : %d\n", MAX_LEVEL);
     printf("MAX_PER_LEAF : %d\n", MAX_PER_LEAF);
-    printf("GPU Mode     : %s\n", use_gpu ? "ENABLED" : "DISABLED");
+    printf("NUM_THREADS  : %d\n", NUM_THREADS);
+    printf("NUM_SAMPLES  : %d\n", NUM_SAMPLES);
+    printf("SEED         : %u\n", SEED);
+    printf("USE_DIRECT   : %s\n", USE_DIRECT ? "y" : "n");
 
     double t0 = omp_get_wtime();
     fmm_solve(particles, N, MAX_LEVEL, MAX_PER_LEAF, use_gpu);
@@ -428,7 +441,7 @@ int main(int argc, char *argv[])
     //        omp_get_max_threads());
 
     /* 只在 N 不大時跑 O(N^2) direct sum 作為 reference */
-    if (N <= 50000) {
+    if (USE_DIRECT && N <= 100000) {
         double *ref_pot = malloc(N * sizeof(double));
         double *ref_fx  = malloc(N * sizeof(double));
         double *ref_fy  = malloc(N * sizeof(double));
@@ -480,7 +493,7 @@ int main(int argc, char *argv[])
         printf("  L2 rel    : %.3e\n", f_rel);
 
         /* 印出前幾顆粒子對照 */
-        int sample = N < 5 ? N : 5;
+        int sample = N < NUM_SAMPLES ? N : NUM_SAMPLES;
         printf("--- Sample (first %d particles) ---\n", sample);
         printf("%4s | %12s %12s | %12s %12s\n",
                "i", "FMM pot", "REF pot", "FMM |F|", "REF |F|");
@@ -494,8 +507,10 @@ int main(int argc, char *argv[])
         free(ref_pot);
         free(ref_fx);
         free(ref_fy);
+    } else if (!USE_DIRECT) {
+        printf("(skip direct sum: USE_DIRECT=n)\n");
     } else {
-        printf("(skip direct sum: N=%d > 5000)\n", N);
+        printf("(skip direct sum: N=%d > 100000)\n", N);
     }
 
     free(fmm_pot);
